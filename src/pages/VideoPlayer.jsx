@@ -1,43 +1,6 @@
 import { useParams, useSearchParams, Link } from 'react-router-dom'
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getVideoUrl } from '../config'
-
-const TURNSTILE_SITE_KEY = '0x4AAAAAAF-N4cGvBQXckJzF'
-
-// Simpan status verifikasi di localStorage agar user tidak perlu verifikasi terus-menerus
-const VERIFY_STORAGE_KEY = 'navidey_turnstile_verified'
-const VERIFY_TTL_MS = 24 * 60 * 60 * 1000 // 24 jam
-
-function isAlreadyVerified() {
-  try {
-    const raw = localStorage.getItem(VERIFY_STORAGE_KEY)
-    if (!raw) return false
-    const data = JSON.parse(raw)
-    if (!data || !data.ts) return false
-    return Date.now() - data.ts < VERIFY_TTL_MS
-  } catch {
-    return false
-  }
-}
-
-function markVerified() {
-  try {
-    localStorage.setItem(
-      VERIFY_STORAGE_KEY,
-      JSON.stringify({ ts: Date.now() })
-    )
-  } catch {
-    // ignore (private mode / quota)
-  }
-}
-
-function clearVerified() {
-  try {
-    localStorage.removeItem(VERIFY_STORAGE_KEY)
-  } catch {
-    // ignore
-  }
-}
 
 export default function VideoPlayer() {
   const { id: paramId } = useParams()
@@ -47,71 +10,12 @@ export default function VideoPlayer() {
 
   const videoRef = useRef(null)
   const adContainerRef = useRef(null)
-  const turnstileRef = useRef(null)
-  const widgetIdRef = useRef(null)
 
   const [copied, setCopied] = useState(false)
-  const [verified, setVerified] = useState(() => isAlreadyVerified())
-  const [turnstileError, setTurnstileError] = useState('')
 
-  const renderTurnstile = useCallback(() => {
-    if (!window.turnstile || !turnstileRef.current) return
-
-    if (widgetIdRef.current !== null) {
-      try {
-        window.turnstile.remove(widgetIdRef.current)
-      } catch {}
-      widgetIdRef.current = null
-    }
-
-    turnstileRef.current.innerHTML = ''
-    widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
-      sitekey: TURNSTILE_SITE_KEY,
-      theme: 'light',
-      callback: () => {
-        markVerified()
-        setVerified(true)
-        setTurnstileError('')
-      },
-      'expired-callback': () => {
-        clearVerified()
-        setVerified(false)
-        setTurnstileError('Verification expired. Please try again.')
-      },
-      'error-callback': () => {
-        setVerified(false)
-        setTurnstileError('Verification failed. Please try again.')
-      },
-    })
-  }, [])
-
+  // Load iklan
   useEffect(() => {
-    if (verified) return
-
-    if (window.turnstile) {
-      renderTurnstile()
-    } else {
-      const interval = setInterval(() => {
-        if (window.turnstile) {
-          clearInterval(interval)
-          renderTurnstile()
-        }
-      }, 200)
-      return () => clearInterval(interval)
-    }
-
-    return () => {
-      if (widgetIdRef.current !== null && window.turnstile) {
-        try {
-          window.turnstile.remove(widgetIdRef.current)
-        } catch {}
-      }
-    }
-  }, [renderTurnstile, verified])
-
-  // Load iklan hanya setelah verified
-  useEffect(() => {
-    if (!verified || !adContainerRef.current) return
+    if (!adContainerRef.current) return
 
     const getAdGroup = () => {
       try {
@@ -190,18 +94,17 @@ export default function VideoPlayer() {
       })
 
     return () => controller.abort()
-  }, [id, verified])
+  }, [id])
 
   useEffect(() => {
     document.title = id ? `Navidey - ${id}` : 'Navidey'
   }, [id])
 
   useEffect(() => {
-    if (!verified) return
     const v = videoRef.current
     if (!v || !videoSrc) return
     v.play()?.catch(() => {})
-  }, [videoSrc, verified])
+  }, [videoSrc])
 
   const handleShare = async () => {
     const url = window.location.href
@@ -216,70 +119,6 @@ export default function VideoPlayer() {
     } catch {}
   }
 
-  // ===== Gate: tampilkan Turnstile dulu =====
-  if (!verified) {
-    return (
-      <div className="min-h-[100dvh] flex flex-col">
-        <header className="pt-2.5 pb-2.5 shrink-0">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6">
-            <div className="flex items-center justify-between">
-              <Link to="/" className="flex items-center">
-                <span className="font-semibold text-[24px] tracking-[-1.5px] text-gray-900">
-                  navidey
-                </span>
-              </Link>
-              <Link
-                to="/"
-                className="flex items-center px-3.5 py-1.5 bg-gray-900 text-white font-semibold rounded-full hover:bg-gray-800 transition-colors text-sm"
-              >
-                Upload
-              </Link>
-            </div>
-          </div>
-        </header>
-
-        <div className="flex-grow flex items-center justify-center px-4">
-          <div className="text-center space-y-5 max-w-md w-full">
-            <h1 className="text-xl font-semibold text-gray-900">
-              Security Check
-            </h1>
-            <p className="text-gray-600 text-sm">
-              Please complete the verification to continue watching.
-            </p>
-
-            <div className="flex justify-center">
-              <div ref={turnstileRef} />
-            </div>
-
-            {turnstileError && (
-              <p className="text-sm text-red-600">{turnstileError}</p>
-            )}
-          </div>
-        </div>
-
-        <footer className="pb-4 shrink-0">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6">
-            <div className="flex items-center justify-center space-x-6">
-              <Link
-                to="/terms-of-service"
-                className="text-[11px] text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                Terms of Service
-              </Link>
-              <Link
-                to="/report"
-                className="text-[11px] text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                Report Abuse
-              </Link>
-            </div>
-          </div>
-        </footer>
-      </div>
-    )
-  }
-
-  // ===== Setelah verified: tampilkan video + iklan (layout ketat tanpa scroll berlebih) =====
   return (
     <div className="min-h-[100dvh] flex flex-col">
       {/* Header ringkas */}
@@ -301,7 +140,7 @@ export default function VideoPlayer() {
         </div>
       </header>
 
-      {/* Konten utama — flex-grow agar muat di viewport */}
+      {/* Konten utama */}
       <div className="flex-grow flex flex-col w-full max-w-[720px] mx-auto px-0 sm:px-3">
         {/* Video area */}
         <div className="w-full flex justify-center shrink-0">
@@ -331,7 +170,7 @@ export default function VideoPlayer() {
           </div>
         </div>
 
-        {/* Share button — sangat compact */}
+        {/* Share button */}
         <div className="w-full flex justify-center mt-2.5 mb-1 shrink-0">
           <button
             type="button"
@@ -357,7 +196,7 @@ export default function VideoPlayer() {
           </button>
         </div>
 
-        {/* Container iklan — centered, no extra margin, constrained */}
+        {/* Container iklan */}
         <div
           ref={adContainerRef}
           className="as mt-2 flex flex-col items-center justify-center shrink-0 w-full overflow-hidden"
@@ -365,7 +204,7 @@ export default function VideoPlayer() {
         />
       </div>
 
-      {/* Footer super compact */}
+      {/* Footer compact */}
       <footer className="pt-2 pb-3 shrink-0">
         <div className="max-w-6xl mx-auto px-3 sm:px-5">
           <div className="flex items-center justify-center space-x-5">
