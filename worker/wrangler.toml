@@ -1,0 +1,11 @@
+name = "navidey-cdn"
+main = "video-proxy.js"
+compatibility_date = "2026-10-01"
+
+# Contoh route (sesuaikan dengan domain kamu):
+# routes = [
+#   { pattern = "cdn.navidey.pages.dev/*", zone_name = "pages.dev" }
+# ]
+#
+# Atau deploy sebagai Worker terpisah lalu set Custom Domain di dashboard:
+#   cdn.navidey.pages.dev  →  Worker "navidey-cdn"
