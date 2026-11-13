@@ -97,7 +97,7 @@ export default function VideoPlayer() {
   }, [id])
 
   useEffect(() => {
-    document.title = id ? `Navidey - ${id}` : 'Navidey'
+    document.title = 'Navidey - Free and Simple Video Hosting'
   }, [id])
 
   useEffect(() => {
